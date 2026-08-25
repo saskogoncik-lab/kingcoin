@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KING COIN</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            background-color: #121212;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            user-select: none;
+        }
+        .balance-box { font-size: 32px; margin-bottom: 10px; font-weight: bold; }
+        .energy-box { color: #00ffcc; font-size: 18px; margin-bottom: 30px; }
+        .coin-img {
+            width: 240px;
+            height: 240px;
+            cursor: pointer;
+            transition: transform 0.05s ease;
+        }
+        .coin-img:active { transform: scale(0.92); }
+        .btn {
+            background: #ffcc00;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="balance-box">👑 <span id="balance">0</span></div>
+    <div class="energy-box">⚡ Energy: <span id="energy">10</span> / <span id="max_energy">10</span></div>
+
+    <!-- Твоя піксельна монета -->
+    <img src="king_coin.png" class="coin-img" id="coin" alt="KING COIN">
+
+    <br>
+    <button class="btn" onclick="buyUpgrade()">⚡ Energy Boost (+5 max) [<span id="upgrade_cost">500</span> 🪙]</button>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        const userId = tg.initDataUnsafe?.user?.id || 12345678;
+
+        const SERVER_URL = "http://YOUR_SERVER_IP:8000";
+
+        let balance = 0;
+        let energy = 10;
+        let maxEnergy = 10;
+        let energyLevel = 1;
+
+        async function loadUser() {
+            try {
+                const res = await fetch(`${SERVER_URL}/api/get_user?user_id=${userId}`);
+                const data = await res.json();
+                balance = data.balance;
+                energy = data.energy;
+                maxEnergy = data.max_energy;
+                energyLevel = data.energy_level;
+
+                document.getElementById('balance').innerText = balance;
+                document.getElementById('energy').innerText = energy;
+                document.getElementById('max_energy').innerText = maxEnergy;
+                document.getElementById('upgrade_cost').innerText = energyLevel * 500;
+            } catch(e) { console.error(e); }
+        }
+
+        document.getElementById('coin').addEventListener('click', async () => {
+            if (energy > 0) {
+                balance++;
+                energy--;
+                document.getElementById('balance').innerText = balance;
+                document.getElementById('energy').innerText = energy;
+
+                await fetch(`${SERVER_URL}/api/tap`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: userId, count: 1 })
+                });
+            }
+        });
+
+        async function buyUpgrade() {
+            const res = await fetch(`${SERVER_URL}/api/upgrade`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ user_id: userId })
+            });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                loadUser();
+            } else {
+                alert(data.message);
+            }
+        }
+
+        loadUser();
+    </script>
+</body>
+</html>
