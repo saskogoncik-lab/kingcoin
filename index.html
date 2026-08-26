@@ -1,67 +1,93 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KING COIN</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { background: #111; color: white; text-align: center; font-family: sans-serif; user-select: none; margin: 0; padding: 20px; }
-        .score { font-size: 32px; font-weight: bold; margin: 10px 0; }
-        .energy { color: #00ffcc; font-size: 18px; margin-bottom: 20px; }
+        body { 
+            background: #111; 
+            color: white; 
+            text-align: center; 
+            font-family: sans-serif; 
+            user-select: none; 
+            margin: 0; 
+            padding: 20px; 
+        }
+        .score { font-size: 36px; font-weight: bold; margin: 15px 0; }
+        .energy { color: #00ffcc; font-size: 18px; margin-bottom: 25px; }
         .coin-btn { background: none; border: none; outline: none; cursor: pointer; padding: 0; }
         .coin-btn img { width: 220px; height: 220px; transition: transform 0.05s; }
         .coin-btn:active img { transform: scale(0.92); }
-        .btn-upgrade { background: #ffcc00; border: none; padding: 12px 24px; font-weight: bold; border-radius: 10px; margin-top: 25px; cursor: pointer; }
+        .btn-upgrade { 
+            background: #ffcc00; 
+            color: #000; 
+            border: none; 
+            padding: 14px 24px; 
+            font-size: 16px; 
+            font-weight: bold; 
+            border-radius: 12px; 
+            margin-top: 25px; 
+            cursor: pointer; 
+        }
     </style>
 </head>
 <body>
     <div class="score">👑 <span id="balance">0</span></div>
-    <div class="energy">⚡ Енергія: <span id="energy">10</span> / <span id="max_energy">10</span></div>
+    <div class="energy">⚡ Energy: <span id="energy">10</span> / <span id="max_energy">10</span></div>
 
     <button class="coin-btn" id="tapBtn">
         <img src="king_coin.png" alt="KING COIN">
     </button>
 
     <div>
-        <button class="btn-upgrade" id="boostBtn">⚡ Boost Energy (+5 max) [500 🪙]</button>
+        <button class="btn-upgrade" id="boostBtn">⚡ Energy Boost (+5 max) [500 🪙]</button>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        const userId = tg.initDataUnsafe?.user?.id || 12345;
 
-        let balance = 0, energy = 10, maxEnergy = 10;
-
-        async function loadData() {
-            try {
-                const res = await fetch(`https://твій-сервер.com/api/user/${userId}`);
-                const data = await res.json();
-                balance = data.balance; energy = data.energy; maxEnergy = data.max_energy;
-                updateUI();
-            } catch(e) {}
-        }
+        // Завантаження даних із локального сховища
+        let balance = parseInt(localStorage.getItem('kc_balance')) || 0;
+        let energy = parseInt(localStorage.getItem('kc_energy')) || 10;
+        let maxEnergy = parseInt(localStorage.getItem('kc_max_energy')) || 10;
 
         function updateUI() {
             document.getElementById('balance').innerText = balance;
             document.getElementById('energy').innerText = energy;
             document.getElementById('max_energy').innerText = maxEnergy;
+            
+            // Збереження в LocalStorage
+            localStorage.setItem('kc_balance', balance);
+            localStorage.setItem('kc_energy', energy);
+            localStorage.setItem('kc_max_energy', maxEnergy);
         }
 
-        document.getElementById('tapBtn').addEventListener('click', async () => {
+        // Клік по монеті
+        document.getElementById('tapBtn').addEventListener('click', () => {
             if (energy > 0) {
-                balance++; energy--;
+                balance++;
+                energy--;
                 updateUI();
-                await fetch(`https://твій-сервер.com/api/tap`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ user_id: userId })
-                });
             }
         });
 
-        // Таймер відновлення енергії (+1 кожні 3 сек)
+        // Покупка бусту енергії
+        document.getElementById('boostBtn').addEventListener('click', () => {
+            if (balance >= 500) {
+                balance -= 500;
+                maxEnergy += 5;
+                energy = maxEnergy;
+                updateUI();
+                alert('Energy upgraded!');
+            } else {
+                alert('Not enough coins!');
+            }
+        });
+
+        // Автоматичне відновлення енергії (+1 кожні 3 секунди)
         setInterval(() => {
             if (energy < maxEnergy) {
                 energy++;
@@ -69,8 +95,9 @@
             }
         }, 3000);
 
-        loadData();
+        updateUI();
     </script>
 </body>
 </html>
+
 
