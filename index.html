@@ -6,88 +6,150 @@
     <title>KING COIN</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { 
-            background: #111; 
-            color: white; 
-            text-align: center; 
-            font-family: sans-serif; 
-            user-select: none; 
-            margin: 0; 
-            padding: 20px; 
-        }
-        .score { font-size: 36px; font-weight: bold; margin: 15px 0; }
-        .energy { color: #00ffcc; font-size: 18px; margin-bottom: 25px; }
+        body { background: #111; color: white; text-align: center; font-family: sans-serif; user-select: none; margin: 0; padding: 15px; }
+        .score { font-size: 32px; font-weight: bold; margin: 10px 0; }
+        .energy { color: #00ffcc; font-size: 16px; margin-bottom: 15px; }
         .coin-btn { background: none; border: none; outline: none; cursor: pointer; padding: 0; }
-        .coin-btn img { width: 220px; height: 220px; transition: transform 0.05s; }
+        .coin-btn img { width: 180px; height: 180px; transition: transform 0.05s; }
         .coin-btn:active img { transform: scale(0.92); }
-        .btn-upgrade { 
-            background: #ffcc00; 
-            color: #000; 
-            border: none; 
-            padding: 14px 24px; 
-            font-size: 16px; 
-            font-weight: bold; 
-            border-radius: 12px; 
-            margin-top: 25px; 
-            cursor: pointer; 
-        }
+        
+        .nav-tabs { display: flex; justify-content: center; gap: 10px; margin: 15px 0; }
+        .tab-btn { background: #222; color: #fff; border: 1px solid #444; padding: 8px 16px; border-radius: 8px; cursor: pointer; }
+        .tab-btn.active { background: #ffcc00; color: #000; font-weight: bold; }
+        
+        .section { display: none; }
+        .section.active { display: block; }
+
+        .card { background: #222; border-radius: 10px; padding: 12px; margin: 8px 0; display: flex; justify-content: space-between; align-items: center; }
+        .btn-buy { background: #ffcc00; color: #000; border: none; padding: 6px 12px; font-weight: bold; border-radius: 6px; cursor: pointer; }
     </style>
 </head>
 <body>
+
     <div class="score">👑 <span id="balance">0</span></div>
-    <div class="energy">⚡ Energy: <span id="energy">10</span> / <span id="max_energy">10</span></div>
+    <div class="energy">⚡ Energy: <span id="energy">10</span> / <span id="max_energy">10</span> | Level: <span id="lvl">1</span></div>
 
-    <button class="coin-btn" id="tapBtn">
-        <img src="king_coin.png" alt="KING COIN">
-    </button>
+    <div class="nav-tabs">
+        <button class="tab-btn active" onclick="switchTab('game')">Game</button>
+        <button class="tab-btn" onclick="switchTab('upgrades')">Upgrades</button>
+        <button class="tab-btn" onclick="switchTab('tasks')">Tasks</button>
+    </div>
 
-    <div>
-        <button class="btn-upgrade" id="boostBtn">⚡ Energy Boost (+5 max) [500 🪙]</button>
+    <!-- GAME TAB -->
+    <div id="tab-game" class="section active">
+        <button class="coin-btn" id="tapBtn">
+            <img src="king_coin.png" alt="KING COIN">
+        </button>
+    </div>
+
+    <!-- UPGRADES TAB -->
+    <div id="tab-upgrades" class="section">
+        <h3>Upgrades</h3>
+        <div class="card">
+            <div>
+                <strong>Tap Multiplier (+1/tap)</strong><br>
+                <small>Cost: <span id="mult_cost">100</span> 🪙</small>
+            </div>
+            <button class="btn-buy" onclick="buyMult()">Upgrade</button>
+        </div>
+        <div class="card">
+            <div>
+                <strong>Max Energy (+5)</strong><br>
+                <small>Cost: <span id="energy_cost">200</span> 🪙</small>
+            </div>
+            <button class="btn-buy" onclick="buyEnergy()">Upgrade</button>
+        </div>
+    </div>
+
+    <!-- TASKS TAB -->
+    <div id="tab-tasks" class="section">
+        <h3>Tasks</h3>
+        <div class="card">
+            <div>
+                <strong>Join Telegram Channel</strong><br>
+                <small>Reward: +500 🪙</small>
+            </div>
+            <button class="btn-buy" id="task1-btn" onclick="completeTask(1, 500)">Claim</button>
+        </div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        // Завантаження даних із локального сховища
         let balance = parseInt(localStorage.getItem('kc_balance')) || 0;
         let energy = parseInt(localStorage.getItem('kc_energy')) || 10;
         let maxEnergy = parseInt(localStorage.getItem('kc_max_energy')) || 10;
+        let tapPower = parseInt(localStorage.getItem('kc_tap_power')) || 1;
+        let level = parseInt(localStorage.getItem('kc_level')) || 1;
 
         function updateUI() {
             document.getElementById('balance').innerText = balance;
             document.getElementById('energy').innerText = energy;
             document.getElementById('max_energy').innerText = maxEnergy;
-            
-            // Збереження в LocalStorage
+            document.getElementById('lvl').innerText = level;
+            document.getElementById('mult_cost').innerText = tapPower * 100;
+            document.getElementById('energy_cost').innerText = (maxEnergy / 5) * 100;
+
             localStorage.setItem('kc_balance', balance);
             localStorage.setItem('kc_energy', energy);
             localStorage.setItem('kc_max_energy', maxEnergy);
+            localStorage.setItem('kc_tap_power', tapPower);
+            localStorage.setItem('kc_level', level);
         }
 
-        // Клік по монеті
         document.getElementById('tapBtn').addEventListener('click', () => {
-            if (energy > 0) {
-                balance++;
-                energy--;
+            if (energy >= tapPower) {
+                balance += tapPower;
+                energy -= tapPower;
+                checkLevelUp();
                 updateUI();
             }
         });
 
-        // Покупка бусту енергії
-        document.getElementById('boostBtn').addEventListener('click', () => {
-            if (balance >= 500) {
-                balance -= 500;
+        function checkLevelUp() {
+            let nextLvlBalance = level * 500;
+            if (balance >= nextLvlBalance) {
+                level++;
+            }
+        }
+
+        function buyMult() {
+            let cost = tapPower * 100;
+            if (balance >= cost) {
+                balance -= cost;
+                tapPower++;
+                updateUI();
+            }
+        }
+
+        function buyEnergy() {
+            let cost = (maxEnergy / 5) * 100;
+            if (balance >= cost) {
+                balance -= cost;
                 maxEnergy += 5;
                 energy = maxEnergy;
                 updateUI();
-                alert('Energy upgraded!');
-            } else {
-                alert('Not enough coins!');
             }
-        });
+        }
 
-        // Автоматичне відновлення енергії (+1 кожні 3 секунди)
+        function completeTask(taskId, reward) {
+            if (!localStorage.getItem('kc_task_' + taskId)) {
+                balance += reward;
+                localStorage.setItem('kc_task_' + taskId, 'true');
+                document.getElementById('task' + taskId + '-btn').innerText = 'Done';
+                document.getElementById('task' + taskId + '-btn').disabled = true;
+                updateUI();
+            }
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + tab).classList.add('active');
+            event.target.classList.add('active');
+        }
+
         setInterval(() => {
             if (energy < maxEnergy) {
                 energy++;
@@ -99,5 +161,3 @@
     </script>
 </body>
 </html>
-
-
