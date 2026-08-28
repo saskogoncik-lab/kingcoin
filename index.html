@@ -62,6 +62,8 @@
     <!-- TASKS TAB -->
     <div id="tab-tasks" class="section">
         <h3>Tasks</h3>
+        
+        <!-- Task 1 -->
         <div class="card">
             <div>
                 <strong>Join KING COIN Channel</strong><br>
@@ -69,21 +71,28 @@
             </div>
             <a class="btn-buy" id="task1-btn" href="https://t.me/kingcoinl" target="_blank" onclick="claimTask(1, 500)">Join & Claim</a>
         </div>
+
+        <!-- Task 2 (Нове завдання) -->
+        <div class="card">
+            <div>
+                <strong>Join Partner Channel</strong><br>
+                <small>Reward: +500 🪙</small>
+            </div>
+            <a class="btn-buy" id="task2-btn" href="https://t.me/link" target="_blank" onclick="claimTask(2, 500)">Join & Claim</a>
+        </div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        // Отримуємо унікальний ID користувача Telegram
         const userId = tg.initDataUnsafe?.user?.id ? tg.initDataUnsafe.user.id.toString() : 'guest';
 
-        // Формуємо унікальні ключі для кожного акаунта
         const KEY_BALANCE = `kc_balance_${userId}`;
         const KEY_ENERGY = `kc_energy_${userId}`;
         const KEY_COOLDOWN_TIME = `kc_cooldown_time_${userId}`;
         const KEY_COOLDOWN_END = `kc_cooldown_end_${userId}`;
-        const KEY_TASK_1 = `kc_task_1_${userId}`;
+        const KEY_TASK_PREFIX = `kc_task_`;
 
         let balance = 0;
         let energy = 10;
@@ -99,7 +108,10 @@
         }
 
         function loadData() {
-            tg.CloudStorage.getItems([KEY_BALANCE, KEY_ENERGY, KEY_COOLDOWN_TIME, KEY_COOLDOWN_END, KEY_TASK_1], (err, values) => {
+            const taskKey1 = `${KEY_TASK_PREFIX}1_${userId}`;
+            const taskKey2 = `${KEY_TASK_PREFIX}2_${userId}`;
+
+            tg.CloudStorage.getItems([KEY_BALANCE, KEY_ENERGY, KEY_COOLDOWN_TIME, KEY_COOLDOWN_END, taskKey1, taskKey2], (err, values) => {
                 const cloudEnd = parseInt(values[KEY_COOLDOWN_END]) || 0;
                 const localEnd = parseInt(localStorage.getItem(KEY_COOLDOWN_END)) || 0;
                 
@@ -108,11 +120,14 @@
                 balance = parseInt(values[KEY_BALANCE]) || parseInt(localStorage.getItem(KEY_BALANCE)) || 0;
                 cooldownTime = parseInt(values[KEY_COOLDOWN_TIME]) || parseInt(localStorage.getItem(KEY_COOLDOWN_TIME)) || 60;
                 
-                if (values[KEY_TASK_1] === 'done') {
-                    const btn = document.getElementById('task1-btn');
-                    btn.innerText = 'Completed';
-                    btn.style.background = '#555';
-                    btn.style.pointerEvents = 'none';
+                // Перевірка виконання Task 1
+                if (values[taskKey1] === 'done' || localStorage.getItem(taskKey1) === 'done') {
+                    setTaskCompletedUI(1);
+                }
+
+                // Перевірка виконання Task 2
+                if (values[taskKey2] === 'done' || localStorage.getItem(taskKey2) === 'done') {
+                    setTaskCompletedUI(2);
                 }
 
                 if (cooldownTime === 30) setUpgradeBoughtUI();
@@ -219,20 +234,25 @@
             btn.disabled = true;
         }
 
+        function setTaskCompletedUI(taskId) {
+            const btn = document.getElementById(`task${taskId}-btn`);
+            if (btn) {
+                btn.innerText = 'Completed';
+                btn.style.background = '#555';
+                btn.style.pointerEvents = 'none';
+            }
+        }
+
         function claimTask(taskId, reward) {
-            tg.CloudStorage.getItem(KEY_TASK_1, (err, value) => {
-                if (value !== 'done') {
-                    balance += reward;
-                    tg.CloudStorage.setItem(KEY_TASK_1, 'done');
-                    updateUI();
-                    saveData();
-                    
-                    const btn = document.getElementById('task1-btn');
-                    btn.innerText = 'Completed';
-                    btn.style.background = '#555';
-                    btn.style.pointerEvents = 'none';
-                }
-            });
+            const taskKey = `${KEY_TASK_PREFIX}${taskId}_${userId}`;
+            
+            if (localStorage.getItem(taskKey) !== 'done') {
+                balance += reward;
+                forceSave(taskKey, 'done');
+                setTaskCompletedUI(taskId);
+                updateUI();
+                saveData();
+            }
         }
 
         function switchTab(tab, event) {
