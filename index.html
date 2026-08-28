@@ -7,18 +7,21 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body { background: #111; color: white; text-align: center; font-family: sans-serif; user-select: none; margin: 0; padding: 15px; }
-        .score { font-size: 32px; font-weight: bold; margin: 10px 0; }
-        .energy { color: #00ffcc; font-size: 16px; margin-bottom: 15px; }
+        .score { font-size: 36px; font-weight: bold; margin: 15px 0; }
+        .energy { color: #00ffcc; font-size: 16px; margin-bottom: 20px; }
         .coin-btn { background: none; border: none; outline: none; cursor: pointer; padding: 0; }
-        .coin-btn img { width: 180px; height: 180px; transition: transform 0.05s; }
+        .coin-btn img { width: 200px; height: 200px; transition: transform 0.05s; }
         .coin-btn:active img { transform: scale(0.92); }
+        
         .nav-tabs { display: flex; justify-content: center; gap: 10px; margin: 15px 0; }
-        .tab-btn { background: #222; color: #fff; border: 1px solid #444; padding: 8px 16px; border-radius: 8px; cursor: pointer; }
-        .tab-btn.active { background: #ffcc00; color: #000; font-weight: bold; }
+        .tab-btn { background: #222; color: #fff; border: 1px solid #444; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .tab-btn.active { background: #ffcc00; color: #000; }
+        
         .section { display: none; }
         .section.active { display: block; }
-        .card { background: #222; border-radius: 10px; padding: 12px; margin: 8px 0; display: flex; justify-content: space-between; align-items: center; }
-        .btn-buy { background: #ffcc00; color: #000; border: none; padding: 6px 12px; font-weight: bold; border-radius: 6px; cursor: pointer; text-decoration: none; }
+
+        .card { background: #222; border-radius: 10px; padding: 12px; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; }
+        .btn-buy { background: #ffcc00; color: #000; border: none; padding: 8px 14px; font-weight: bold; border-radius: 6px; cursor: pointer; text-decoration: none; }
     </style>
 </head>
 <body>
@@ -31,44 +34,57 @@
         <button class="tab-btn" onclick="switchTab('tasks')">Tasks</button>
     </div>
 
+    <!-- GAME TAB -->
     <div id="tab-game" class="section active">
         <button class="coin-btn" id="tapBtn">
             <img src="king_coin.png" alt="KING COIN">
         </button>
     </div>
 
+    <!-- TASKS TAB -->
     <div id="tab-tasks" class="section">
         <h3>Tasks</h3>
-        <div id="tasks-list">Loading...</div>
+        <div class="card">
+            <div>
+                <strong>Join KING COIN Channel</strong><br>
+                <small>Reward: +500 🪙</small>
+            </div>
+            <a class="btn-buy" id="task1-btn" href="https://t.me/kingcoinl" target="_blank" onclick="claimTask(1, 500)">Join & Claim</a>
+        </div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        const userId = tg.initDataUnsafe?.user?.id || 12345;
-        const SERVER_URL = "http://127.0.0.1:8000"; // або адреса твоего сервера
 
-        let balance = 0, energy = 10, maxEnergy = 10;
+        let balance = 0;
+        let energy = 10;
+        let maxEnergy = 10;
 
-        async function loadUserData() {
-            try {
-                const res = await fetch(`${SERVER_URL}/api/user/${userId}`);
-                const data = await res.json();
-                balance = data.balance;
-                energy = data.energy;
-                maxEnergy = data.max_energy;
-                updateUI();
-            } catch(e) {}
+        // Завантаження збережень з хмари Telegram
+        function loadData() {
+            tg.CloudStorage.getItems(['kc_balance', 'kc_energy', 'kc_max', 'kc_task_1'], (err, values) => {
+                if (!err) {
+                    balance = parseInt(values.kc_balance) || 0;
+                    energy = parseInt(values.kc_energy) || 10;
+                    maxEnergy = parseInt(values.kc_max) || 10;
+                    
+                    if (values.kc_task_1 === 'done') {
+                        const btn = document.getElementById('task1-btn');
+                        btn.innerText = 'Completed';
+                        btn.style.background = '#555';
+                        btn.style.pointerEvents = 'none';
+                    }
+                    updateUI();
+                }
+            });
         }
 
-        async function saveData() {
-            try {
-                await fetch(`${SERVER_URL}/api/save`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ user_id: userId, balance, energy, max_energy: maxEnergy })
-                });
-            } catch(e) {}
+        // Збереження в хмару Telegram (синхронізує пристрої)
+        function saveData() {
+            tg.CloudStorage.setItem('kc_balance', balance.toString());
+            tg.CloudStorage.setItem('kc_energy', energy.toString());
+            tg.CloudStorage.setItem('kc_max', maxEnergy.toString());
         }
 
         function updateUI() {
@@ -77,6 +93,7 @@
             document.getElementById('max_energy').innerText = maxEnergy;
         }
 
+        // Клік по монеті
         document.getElementById('tapBtn').addEventListener('click', () => {
             if (energy > 0) {
                 balance++;
@@ -86,47 +103,41 @@
             }
         });
 
-        async function loadTasks() {
-            try {
-                const res = await fetch(`${SERVER_URL}/api/tasks`);
-                const tasks = await res.json();
-                const list = document.getElementById('tasks-list');
-                list.innerHTML = '';
-                tasks.forEach(task => {
-                    list.innerHTML += `
-                        <div class="card">
-                            <div>
-                                <strong>${task.title}</strong><br>
-                                <small>Reward: +${task.reward} 🪙</small>
-                            </div>
-                            <a class="btn-buy" href="${task.link}" target="_blank" onclick="claimTask(${task.reward})">Join & Claim</a>
-                        </div>
-                    `;
-                });
-            } catch(e) {}
-        }
-
-        function claimTask(reward) {
-            balance += reward;
-            updateUI();
-            saveData();
+        // Завдання на канал
+        function claimTask(taskId, reward) {
+            tg.CloudStorage.getItem('kc_task_' + taskId, (err, value) => {
+                if (value !== 'done') {
+                    balance += reward;
+                    tg.CloudStorage.setItem('kc_task_' + taskId, 'done');
+                    updateUI();
+                    saveData();
+                    
+                    const btn = document.getElementById('task1-btn');
+                    btn.innerText = 'Completed';
+                    btn.style.background = '#555';
+                    btn.style.pointerEvents = 'none';
+                }
+            });
         }
 
         function switchTab(tab) {
             document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById('tab-' + tab).classList.add('active');
-            if(tab === 'tasks') loadTasks();
+            event.target.classList.add('active');
         }
 
+        // Авто-відновлення енергії (+1 кожні 3 сек)
         setInterval(() => {
             if (energy < maxEnergy) {
                 energy++;
                 updateUI();
+                saveData();
             }
         }, 3000);
 
-        loadUserData();
+        loadData();
     </script>
 </body>
 </html>
+
