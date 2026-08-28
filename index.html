@@ -83,53 +83,59 @@
         let timerInterval = null;
         let saveTimeout = null;
 
+        // Синхронне зберігання для гарантії (Local + Cloud)
+        function forceSave(key, val) {
+            localStorage.setItem(key, val.toString());
+            tg.CloudStorage.setItem(key, val.toString());
+        }
+
         function loadData() {
             tg.CloudStorage.getItems(['kc_balance', 'kc_energy', 'kc_cooldown_time', 'kc_cooldown_end', 'kc_task_1'], (err, values) => {
-                if (!err) {
-                    balance = parseInt(values.kc_balance) || 0;
-                    cooldownTime = parseInt(values.kc_cooldown_time) || 60;
-                    cooldownEnd = parseInt(values.kc_cooldown_end) || 0;
-                    
-                    if (values.kc_task_1 === 'done') {
-                        const btn = document.getElementById('task1-btn');
-                        btn.innerText = 'Completed';
-                        btn.style.background = '#555';
-                        btn.style.pointerEvents = 'none';
-                    }
-
-                    if (cooldownTime === 30) {
-                        setUpgradeBoughtUI();
-                    }
-
-                    const now = Math.floor(Date.now() / 1000);
-                    if (cooldownEnd > now) {
-                        energy = 0;
-                        startCooldown(cooldownEnd - now);
-                    } else {
-                        // Якщо таймер пройшов — енергія 100%, монета активна
-                        energy = maxEnergy;
-                        cooldownEnd = 0;
-                        document.getElementById('tapBtn').disabled = false;
-                        saveData();
-                    }
-
-                    updateUI();
+                const cloudEnd = parseInt(values.kc_cooldown_end) || 0;
+                const localEnd = parseInt(localStorage.getItem('kc_cooldown_end')) || 0;
+                
+                // Беремо найновіший час перезарядки (хмара або локальна пам'ять)
+                cooldownEnd = Math.max(cloudEnd, localEnd);
+                
+                balance = parseInt(values.kc_balance) || parseInt(localStorage.getItem('kc_balance')) || 0;
+                cooldownTime = parseInt(values.kc_cooldown_time) || parseInt(localStorage.getItem('kc_cooldown_time')) || 60;
+                
+                if (values.kc_task_1 === 'done') {
+                    const btn = document.getElementById('task1-btn');
+                    btn.innerText = 'Completed';
+                    btn.style.background = '#555';
+                    btn.style.pointerEvents = 'none';
                 }
+
+                if (cooldownTime === 30) setUpgradeBoughtUI();
+
+                const now = Math.floor(Date.now() / 1000);
+
+                if (cooldownEnd > now) {
+                    energy = 0;
+                    startCooldown(cooldownEnd - now);
+                } else {
+                    energy = maxEnergy;
+                    cooldownEnd = 0;
+                    forceSave('kc_cooldown_end', 0);
+                    forceSave('kc_energy', maxEnergy);
+                    document.getElementById('tapBtn').disabled = false;
+                }
+
+                updateUI();
             });
         }
 
         function saveData() {
-            tg.CloudStorage.setItem('kc_balance', balance.toString());
-            tg.CloudStorage.setItem('kc_energy', energy.toString());
-            tg.CloudStorage.setItem('kc_cooldown_time', cooldownTime.toString());
-            tg.CloudStorage.setItem('kc_cooldown_end', cooldownEnd.toString());
+            forceSave('kc_balance', balance);
+            forceSave('kc_energy', energy);
+            forceSave('kc_cooldown_time', cooldownTime);
+            forceSave('kc_cooldown_end', cooldownEnd);
         }
 
         function triggerSave() {
             clearTimeout(saveTimeout);
-            saveTimeout = setTimeout(() => {
-                saveData();
-            }, 800);
+            saveTimeout = setTimeout(saveData, 500);
         }
 
         function updateUI() {
@@ -139,15 +145,26 @@
         }
 
         document.getElementById('tapBtn').addEventListener('click', () => {
+            const now = Math.floor(Date.now() / 1000);
+            
+            // Захист: якщо таймер ще діє, тапнути не можна
+            if (cooldownEnd > now) {
+                energy = 0;
+                updateUI();
+                return;
+            }
+
             if (energy > 0) {
                 balance++;
                 energy--;
                 updateUI();
 
                 if (energy === 0) {
-                    const now = Math.floor(Date.now() / 1000);
                     cooldownEnd = now + cooldownTime;
-                    saveData();
+                    // Миттєвий форсований запис ДО початку анімації/таймера
+                    forceSave('kc_cooldown_end', cooldownEnd);
+                    forceSave('kc_energy', 0);
+                    forceSave('kc_balance', balance);
                     startCooldown(cooldownTime);
                 } else {
                     triggerSave();
@@ -168,11 +185,11 @@
                 if (timeLeft <= 0) {
                     clearInterval(timerInterval);
                     energy = maxEnergy;
-                    cooldownEnd = 0; // Скидаємо час перезарядки в нуль
+                    cooldownEnd = 0;
                     document.getElementById('tapBtn').disabled = false;
                     document.getElementById('timer-text').innerText = '';
                     updateUI();
-                    saveData(); // Миттєво зберігаємо розблокований стан в хмару
+                    saveData();
                 }
             }, 1000);
         }
@@ -219,9 +236,7 @@
             event.target.classList.add('active');
         }
 
-        window.addEventListener('beforeunload', () => {
-            saveData();
-        });
+        window.addEventListener('beforeunload', saveData);
 
         loadData();
     </script>
