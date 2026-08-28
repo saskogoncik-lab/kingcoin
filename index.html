@@ -78,16 +78,16 @@
         let balance = 0;
         let energy = 10;
         let maxEnergy = 10;
-        let cooldownTime = 60; // дефолтний час відновлення (секунди)
-        let isCooldown = false;
+        let cooldownTime = 60;
+        let cooldownEnd = 0;
         let timerInterval = null;
 
         function loadData() {
-            tg.CloudStorage.getItems(['kc_balance', 'kc_energy', 'kc_cooldown_time', 'kc_task_1'], (err, values) => {
+            tg.CloudStorage.getItems(['kc_balance', 'kc_energy', 'kc_cooldown_time', 'kc_cooldown_end', 'kc_task_1'], (err, values) => {
                 if (!err) {
                     balance = parseInt(values.kc_balance) || 0;
-                    energy = values.kc_energy !== undefined ? parseInt(values.kc_energy) : 10;
                     cooldownTime = parseInt(values.kc_cooldown_time) || 60;
+                    cooldownEnd = parseInt(values.kc_cooldown_end) || 0;
                     
                     if (values.kc_task_1 === 'done') {
                         const btn = document.getElementById('task1-btn');
@@ -100,8 +100,13 @@
                         setUpgradeBoughtUI();
                     }
 
-                    if (energy === 0) {
-                        startCooldown();
+                    const now = Math.floor(Date.now() / 1000);
+                    if (cooldownEnd > now) {
+                        energy = 0;
+                        startCooldown(cooldownEnd - now);
+                    } else {
+                        energy = values.kc_energy !== undefined ? parseInt(values.kc_energy) : 10;
+                        if (energy === 0) energy = 10; // Якщо перезарядка завершилася, даємо енергію
                     }
 
                     updateUI();
@@ -113,6 +118,7 @@
             tg.CloudStorage.setItem('kc_balance', balance.toString());
             tg.CloudStorage.setItem('kc_energy', energy.toString());
             tg.CloudStorage.setItem('kc_cooldown_time', cooldownTime.toString());
+            tg.CloudStorage.setItem('kc_cooldown_end', cooldownEnd.toString());
         }
 
         function updateUI() {
@@ -121,26 +127,25 @@
             document.getElementById('max_energy').innerText = maxEnergy;
         }
 
-        // Тап по монеті
         document.getElementById('tapBtn').addEventListener('click', () => {
-            if (energy > 0 && !isCooldown) {
+            if (energy > 0) {
                 balance++;
                 energy--;
                 updateUI();
-                saveData();
 
                 if (energy === 0) {
-                    startCooldown();
+                    const now = Math.floor(Date.now() / 1000);
+                    cooldownEnd = now + cooldownTime;
+                    startCooldown(cooldownTime);
                 }
+                saveData();
             }
         });
 
-        // Запуск таймера відновлення
-        function startCooldown() {
-            isCooldown = true;
+        function startCooldown(timeLeft) {
             document.getElementById('tapBtn').disabled = true;
-            let timeLeft = cooldownTime;
-            
+            if (timerInterval) clearInterval(timerInterval);
+
             document.getElementById('timer-text').innerText = `⏳ Reloading energy: ${timeLeft}s`;
 
             timerInterval = setInterval(() => {
@@ -150,7 +155,7 @@
                 if (timeLeft <= 0) {
                     clearInterval(timerInterval);
                     energy = maxEnergy;
-                    isCooldown = false;
+                    cooldownEnd = 0;
                     document.getElementById('tapBtn').disabled = false;
                     document.getElementById('timer-text').innerText = '';
                     updateUI();
@@ -159,7 +164,6 @@
             }, 1000);
         }
 
-        // Купівля бусту на 30 секунд
         function buyFastEnergy() {
             if (balance >= 1000 && cooldownTime !== 30) {
                 balance -= 1000;
@@ -206,5 +210,3 @@
     </script>
 </body>
 </html>
-
-
