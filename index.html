@@ -8,10 +8,12 @@
     <style>
         body { background: #111; color: white; text-align: center; font-family: sans-serif; user-select: none; margin: 0; padding: 15px; }
         .score { font-size: 36px; font-weight: bold; margin: 15px 0; }
-        .energy { color: #00ffcc; font-size: 16px; margin-bottom: 20px; }
+        .energy { color: #00ffcc; font-size: 16px; margin-bottom: 10px; }
+        .timer { color: #ff5555; font-size: 14px; font-weight: bold; height: 20px; margin-bottom: 10px; }
         .coin-btn { background: none; border: none; outline: none; cursor: pointer; padding: 0; }
         .coin-btn img { width: 200px; height: 200px; transition: transform 0.05s; }
         .coin-btn:active img { transform: scale(0.92); }
+        .coin-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         
         .nav-tabs { display: flex; justify-content: center; gap: 10px; margin: 15px 0; }
         .tab-btn { background: #222; color: #fff; border: 1px solid #444; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: bold; }
@@ -22,16 +24,19 @@
 
         .card { background: #222; border-radius: 10px; padding: 12px; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; }
         .btn-buy { background: #ffcc00; color: #000; border: none; padding: 8px 14px; font-weight: bold; border-radius: 6px; cursor: pointer; text-decoration: none; }
+        .btn-buy:disabled { background: #555; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
     <div class="score">👑 <span id="balance">0</span></div>
     <div class="energy">⚡ Energy: <span id="energy">10</span> / <span id="max_energy">10</span></div>
+    <div class="timer" id="timer-text"></div>
 
     <div class="nav-tabs">
-        <button class="tab-btn active" onclick="switchTab('game')">Game</button>
-        <button class="tab-btn" onclick="switchTab('tasks')">Tasks</button>
+        <button class="tab-btn active" onclick="switchTab('game', event)">Game</button>
+        <button class="tab-btn" onclick="switchTab('upgrades', event)">Upgrades</button>
+        <button class="tab-btn" onclick="switchTab('tasks', event)">Tasks</button>
     </div>
 
     <!-- GAME TAB -->
@@ -39,6 +44,19 @@
         <button class="coin-btn" id="tapBtn">
             <img src="king_coin.png" alt="KING COIN">
         </button>
+    </div>
+
+    <!-- UPGRADES TAB -->
+    <div id="tab-upgrades" class="section">
+        <h3>Upgrades</h3>
+        <div class="card">
+            <div>
+                <strong>Fast Energy Reload</strong><br>
+                <small>30 sec cooldown instead of 60 sec</small><br>
+                <small style="color: #ffcc00;">Cost: 1000 🪙</small>
+            </div>
+            <button class="btn-buy" id="upgrade-btn" onclick="buyFastEnergy()">Buy Upgrade</button>
+        </div>
     </div>
 
     <!-- TASKS TAB -->
@@ -60,14 +78,16 @@
         let balance = 0;
         let energy = 10;
         let maxEnergy = 10;
+        let cooldownTime = 60; // дефолтний час відновлення (секунди)
+        let isCooldown = false;
+        let timerInterval = null;
 
-        // Завантаження збережень з хмари Telegram
         function loadData() {
-            tg.CloudStorage.getItems(['kc_balance', 'kc_energy', 'kc_max', 'kc_task_1'], (err, values) => {
+            tg.CloudStorage.getItems(['kc_balance', 'kc_energy', 'kc_cooldown_time', 'kc_task_1'], (err, values) => {
                 if (!err) {
                     balance = parseInt(values.kc_balance) || 0;
-                    energy = parseInt(values.kc_energy) || 10;
-                    maxEnergy = parseInt(values.kc_max) || 10;
+                    energy = values.kc_energy !== undefined ? parseInt(values.kc_energy) : 10;
+                    cooldownTime = parseInt(values.kc_cooldown_time) || 60;
                     
                     if (values.kc_task_1 === 'done') {
                         const btn = document.getElementById('task1-btn');
@@ -75,16 +95,24 @@
                         btn.style.background = '#555';
                         btn.style.pointerEvents = 'none';
                     }
+
+                    if (cooldownTime === 30) {
+                        setUpgradeBoughtUI();
+                    }
+
+                    if (energy === 0) {
+                        startCooldown();
+                    }
+
                     updateUI();
                 }
             });
         }
 
-        // Збереження в хмару Telegram (синхронізує пристрої)
         function saveData() {
             tg.CloudStorage.setItem('kc_balance', balance.toString());
             tg.CloudStorage.setItem('kc_energy', energy.toString());
-            tg.CloudStorage.setItem('kc_max', maxEnergy.toString());
+            tg.CloudStorage.setItem('kc_cooldown_time', cooldownTime.toString());
         }
 
         function updateUI() {
@@ -93,17 +121,64 @@
             document.getElementById('max_energy').innerText = maxEnergy;
         }
 
-        // Клік по монеті
+        // Тап по монеті
         document.getElementById('tapBtn').addEventListener('click', () => {
-            if (energy > 0) {
+            if (energy > 0 && !isCooldown) {
                 balance++;
                 energy--;
                 updateUI();
                 saveData();
+
+                if (energy === 0) {
+                    startCooldown();
+                }
             }
         });
 
-        // Завдання на канал
+        // Запуск таймера відновлення
+        function startCooldown() {
+            isCooldown = true;
+            document.getElementById('tapBtn').disabled = true;
+            let timeLeft = cooldownTime;
+            
+            document.getElementById('timer-text').innerText = `⏳ Reloading energy: ${timeLeft}s`;
+
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer-text').innerText = `⏳ Reloading energy: ${timeLeft}s`;
+
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    energy = maxEnergy;
+                    isCooldown = false;
+                    document.getElementById('tapBtn').disabled = false;
+                    document.getElementById('timer-text').innerText = '';
+                    updateUI();
+                    saveData();
+                }
+            }, 1000);
+        }
+
+        // Купівля бусту на 30 секунд
+        function buyFastEnergy() {
+            if (balance >= 1000 && cooldownTime !== 30) {
+                balance -= 1000;
+                cooldownTime = 30;
+                setUpgradeBoughtUI();
+                updateUI();
+                saveData();
+                alert('Success! Energy reload time is now 30 seconds!');
+            } else if (balance < 1000) {
+                alert('Not enough coins! You need 1000 🪙');
+            }
+        }
+
+        function setUpgradeBoughtUI() {
+            const btn = document.getElementById('upgrade-btn');
+            btn.innerText = 'Purchased';
+            btn.disabled = true;
+        }
+
         function claimTask(taskId, reward) {
             tg.CloudStorage.getItem('kc_task_' + taskId, (err, value) => {
                 if (value !== 'done') {
@@ -120,24 +195,16 @@
             });
         }
 
-        function switchTab(tab) {
+        function switchTab(tab, event) {
             document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById('tab-' + tab).classList.add('active');
             event.target.classList.add('active');
         }
 
-        // Авто-відновлення енергії (+1 кожні 3 сек)
-        setInterval(() => {
-            if (energy < maxEnergy) {
-                energy++;
-                updateUI();
-                saveData();
-            }
-        }, 3000);
-
         loadData();
     </script>
 </body>
 </html>
+
 
