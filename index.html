@@ -75,6 +75,16 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
 
+        // Отримуємо унікальний ID користувача Telegram
+        const userId = tg.initDataUnsafe?.user?.id ? tg.initDataUnsafe.user.id.toString() : 'guest';
+
+        // Формуємо унікальні ключі для кожного акаунта
+        const KEY_BALANCE = `kc_balance_${userId}`;
+        const KEY_ENERGY = `kc_energy_${userId}`;
+        const KEY_COOLDOWN_TIME = `kc_cooldown_time_${userId}`;
+        const KEY_COOLDOWN_END = `kc_cooldown_end_${userId}`;
+        const KEY_TASK_1 = `kc_task_1_${userId}`;
+
         let balance = 0;
         let energy = 10;
         let maxEnergy = 10;
@@ -83,24 +93,22 @@
         let timerInterval = null;
         let saveTimeout = null;
 
-        // Синхронне зберігання для гарантії (Local + Cloud)
         function forceSave(key, val) {
             localStorage.setItem(key, val.toString());
             tg.CloudStorage.setItem(key, val.toString());
         }
 
         function loadData() {
-            tg.CloudStorage.getItems(['kc_balance', 'kc_energy', 'kc_cooldown_time', 'kc_cooldown_end', 'kc_task_1'], (err, values) => {
-                const cloudEnd = parseInt(values.kc_cooldown_end) || 0;
-                const localEnd = parseInt(localStorage.getItem('kc_cooldown_end')) || 0;
+            tg.CloudStorage.getItems([KEY_BALANCE, KEY_ENERGY, KEY_COOLDOWN_TIME, KEY_COOLDOWN_END, KEY_TASK_1], (err, values) => {
+                const cloudEnd = parseInt(values[KEY_COOLDOWN_END]) || 0;
+                const localEnd = parseInt(localStorage.getItem(KEY_COOLDOWN_END)) || 0;
                 
-                // Беремо найновіший час перезарядки (хмара або локальна пам'ять)
                 cooldownEnd = Math.max(cloudEnd, localEnd);
                 
-                balance = parseInt(values.kc_balance) || parseInt(localStorage.getItem('kc_balance')) || 0;
-                cooldownTime = parseInt(values.kc_cooldown_time) || parseInt(localStorage.getItem('kc_cooldown_time')) || 60;
+                balance = parseInt(values[KEY_BALANCE]) || parseInt(localStorage.getItem(KEY_BALANCE)) || 0;
+                cooldownTime = parseInt(values[KEY_COOLDOWN_TIME]) || parseInt(localStorage.getItem(KEY_COOLDOWN_TIME)) || 60;
                 
-                if (values.kc_task_1 === 'done') {
+                if (values[KEY_TASK_1] === 'done') {
                     const btn = document.getElementById('task1-btn');
                     btn.innerText = 'Completed';
                     btn.style.background = '#555';
@@ -117,8 +125,8 @@
                 } else {
                     energy = maxEnergy;
                     cooldownEnd = 0;
-                    forceSave('kc_cooldown_end', 0);
-                    forceSave('kc_energy', maxEnergy);
+                    forceSave(KEY_COOLDOWN_END, 0);
+                    forceSave(KEY_ENERGY, maxEnergy);
                     document.getElementById('tapBtn').disabled = false;
                 }
 
@@ -127,10 +135,10 @@
         }
 
         function saveData() {
-            forceSave('kc_balance', balance);
-            forceSave('kc_energy', energy);
-            forceSave('kc_cooldown_time', cooldownTime);
-            forceSave('kc_cooldown_end', cooldownEnd);
+            forceSave(KEY_BALANCE, balance);
+            forceSave(KEY_ENERGY, energy);
+            forceSave(KEY_COOLDOWN_TIME, cooldownTime);
+            forceSave(KEY_COOLDOWN_END, cooldownEnd);
         }
 
         function triggerSave() {
@@ -147,7 +155,6 @@
         document.getElementById('tapBtn').addEventListener('click', () => {
             const now = Math.floor(Date.now() / 1000);
             
-            // Захист: якщо таймер ще діє, тапнути не можна
             if (cooldownEnd > now) {
                 energy = 0;
                 updateUI();
@@ -161,10 +168,9 @@
 
                 if (energy === 0) {
                     cooldownEnd = now + cooldownTime;
-                    // Миттєвий форсований запис ДО початку анімації/таймера
-                    forceSave('kc_cooldown_end', cooldownEnd);
-                    forceSave('kc_energy', 0);
-                    forceSave('kc_balance', balance);
+                    forceSave(KEY_COOLDOWN_END, cooldownEnd);
+                    forceSave(KEY_ENERGY, 0);
+                    forceSave(KEY_BALANCE, balance);
                     startCooldown(cooldownTime);
                 } else {
                     triggerSave();
@@ -214,10 +220,10 @@
         }
 
         function claimTask(taskId, reward) {
-            tg.CloudStorage.getItem('kc_task_' + taskId, (err, value) => {
+            tg.CloudStorage.getItem(KEY_TASK_1, (err, value) => {
                 if (value !== 'done') {
                     balance += reward;
-                    tg.CloudStorage.setItem('kc_task_' + taskId, 'done');
+                    tg.CloudStorage.setItem(KEY_TASK_1, 'done');
                     updateUI();
                     saveData();
                     
