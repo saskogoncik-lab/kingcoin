@@ -106,7 +106,11 @@
                         energy = 0;
                         startCooldown(cooldownEnd - now);
                     } else {
-                        energy = values.kc_energy !== undefined ? parseInt(values.kc_energy) : 10;
+                        // Якщо таймер пройшов — енергія 100%, монета активна
+                        energy = maxEnergy;
+                        cooldownEnd = 0;
+                        document.getElementById('tapBtn').disabled = false;
+                        saveData();
                     }
 
                     updateUI();
@@ -114,7 +118,6 @@
             });
         }
 
-        // Оптимізоване збереження без блокування
         function saveData() {
             tg.CloudStorage.setItem('kc_balance', balance.toString());
             tg.CloudStorage.setItem('kc_energy', energy.toString());
@@ -122,7 +125,6 @@
             tg.CloudStorage.setItem('kc_cooldown_end', cooldownEnd.toString());
         }
 
-        // Викликаємо збереження не на кожен тап, а через 0.8с після зупинки тапів
         function triggerSave() {
             clearTimeout(saveTimeout);
             saveTimeout = setTimeout(() => {
@@ -145,7 +147,7 @@
                 if (energy === 0) {
                     const now = Math.floor(Date.now() / 1000);
                     cooldownEnd = now + cooldownTime;
-                    saveData(); // При вичерпанні енергії зберігаємо миттєво!
+                    saveData();
                     startCooldown(cooldownTime);
                 } else {
                     triggerSave();
@@ -166,11 +168,11 @@
                 if (timeLeft <= 0) {
                     clearInterval(timerInterval);
                     energy = maxEnergy;
-                    cooldownEnd = 0;
+                    cooldownEnd = 0; // Скидаємо час перезарядки в нуль
                     document.getElementById('tapBtn').disabled = false;
                     document.getElementById('timer-text').innerText = '';
                     updateUI();
-                    saveData();
+                    saveData(); // Миттєво зберігаємо розблокований стан в хмару
                 }
             }, 1000);
         }
@@ -217,7 +219,6 @@
             event.target.classList.add('active');
         }
 
-        // Примусове збереження при закритті вікна
         window.addEventListener('beforeunload', () => {
             saveData();
         });
