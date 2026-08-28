@@ -81,6 +81,7 @@
         let cooldownTime = 60;
         let cooldownEnd = 0;
         let timerInterval = null;
+        let saveTimeout = null;
 
         function loadData() {
             tg.CloudStorage.getItems(['kc_balance', 'kc_energy', 'kc_cooldown_time', 'kc_cooldown_end', 'kc_task_1'], (err, values) => {
@@ -106,7 +107,6 @@
                         startCooldown(cooldownEnd - now);
                     } else {
                         energy = values.kc_energy !== undefined ? parseInt(values.kc_energy) : 10;
-                        if (energy === 0) energy = 10; // Якщо перезарядка завершилася, даємо енергію
                     }
 
                     updateUI();
@@ -114,11 +114,20 @@
             });
         }
 
+        // Оптимізоване збереження без блокування
         function saveData() {
             tg.CloudStorage.setItem('kc_balance', balance.toString());
             tg.CloudStorage.setItem('kc_energy', energy.toString());
             tg.CloudStorage.setItem('kc_cooldown_time', cooldownTime.toString());
             tg.CloudStorage.setItem('kc_cooldown_end', cooldownEnd.toString());
+        }
+
+        // Викликаємо збереження не на кожен тап, а через 0.8с після зупинки тапів
+        function triggerSave() {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                saveData();
+            }, 800);
         }
 
         function updateUI() {
@@ -136,9 +145,11 @@
                 if (energy === 0) {
                     const now = Math.floor(Date.now() / 1000);
                     cooldownEnd = now + cooldownTime;
+                    saveData(); // При вичерпанні енергії зберігаємо миттєво!
                     startCooldown(cooldownTime);
+                } else {
+                    triggerSave();
                 }
-                saveData();
             }
         });
 
@@ -205,6 +216,11 @@
             document.getElementById('tab-' + tab).classList.add('active');
             event.target.classList.add('active');
         }
+
+        // Примусове збереження при закритті вікна
+        window.addEventListener('beforeunload', () => {
+            saveData();
+        });
 
         loadData();
     </script>
